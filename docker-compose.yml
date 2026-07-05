@@ -12,7 +12,7 @@ services:
     container_name: node1
     environment:
       - NODE_NAME=node1
-      - PEER_URL=http://node2:3000
+      - PEERS=http://node2:3000
     ports:
       - "3000:3000"
     depends_on:
