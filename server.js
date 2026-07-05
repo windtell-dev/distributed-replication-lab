@@ -87,6 +87,54 @@ app.post("/notes", async (req, res) => {
 
 
 
+// POST /sync
+// Pulls notes from a peer and stores any notes this node does not already have
+app.post("/sync", async (req, res) => {
+  const peer = req.body.peer;
+
+  if (!peer) {
+    return res.status(400).json({
+      message: "Missing peer URL"
+    });
+  }
+
+  try {
+    const response = await axios.get(`${peer}/notes`);
+    const peerNotes = response.data;
+
+    let added = 0;
+
+    for (const peerNote of peerNotes) {
+      const alreadyExists = notes.some(note => note.id === peerNote.id);
+
+      if (!alreadyExists) {
+        notes.push({
+          ...peerNote,
+          replicated: true
+        });
+
+        added++;
+      }
+    }
+
+    res.json({
+      message: "Sync complete",
+      node: NODE_NAME,
+      peer: peer,
+      added: added,
+      totalNotes: notes.length
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Sync failed",
+      node: NODE_NAME,
+      peer: peer
+    });
+  }
+});
+
+
+
 // Get All Notes
 // Returns every note currently stored on THIS node
 // Later will replicate notes so they'll eventually contain the same data
