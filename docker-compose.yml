@@ -4,6 +4,7 @@ services:
     container_name: node2
     environment:
       - NODE_NAME=node2
+      - PEERS=http://node1:3000
     ports:
       - "3001:3000"
 

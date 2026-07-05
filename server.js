@@ -135,6 +135,35 @@ app.post("/sync", async (req, res) => {
 
 
 
+// Syncs this node from one peer
+async function syncFromPeer(peer) {
+  try {
+    const response = await axios.get(`${peer}/notes`);
+    const peerNotes = response.data;
+
+    let added = 0;
+
+    for (const peerNote of peerNotes) {
+      const alreadyExists = notes.some(note => note.id === peerNote.id);
+
+      if (!alreadyExists) {
+        notes.push({
+          ...peerNote,
+          replicated: true
+        });
+
+        added++;
+      }
+    }
+
+    console.log(`${NODE_NAME} synced ${added} note(s) from ${peer}`);
+  } catch (error) {
+    console.log(`${NODE_NAME} failed to sync from ${peer}`);
+  }
+}
+
+
+
 // Get All Notes
 // Returns every note currently stored on THIS node
 // Later will replicate notes so they'll eventually contain the same data
@@ -145,10 +174,14 @@ app.get("/notes", (req, res) => {
 
 
 // Start Server
-app.listen(3000, () => {
+app.listen(3000, async () => {
   console.log(`${NODE_NAME} running on port 3000`);
 
   if (PEERS.length > 0) {
     console.log(`Peers configured at ${PEERS.join(", ")}`);
+
+    for (const peer of PEERS) {
+      await syncFromPeer(peer);
+    }
   }
 });
