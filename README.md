@@ -1,6 +1,6 @@
 # Distributed Notes Lab
 
-> A distributed systems learning project exploring how data remains available when servers fail. Built with Docker using multiple containers to simulate distributed server nodes. Demonstrates data replication, automatic recovery after node failures, and cluster synchronization through a three-node distributed system with a real-time operations console.
+A distributed systems learning project exploring how data remains available when servers fail. Built with Docker using multiple containers to simulate distributed server nodes. Demonstrates data replication, automatic recovery after node failures, and cluster synchronization through a three-node distributed system with a real-time operations console.
 
 <img width="1680" height="927" alt="Console" src="https://github.com/user-attachments/assets/7b7be3db-6aa8-46a1-bdaf-7dcfe082048f" />
 <img width="1636" height="817" alt="Console2" src="https://github.com/user-attachments/assets/b4dbf384-0287-42bb-a6eb-f5a57bb78c85" />
@@ -52,18 +52,19 @@ Server Architecture
 Clone the repository:
 
 ```bash
-git clone https://github.com/windtell-dev/Distributed-Replication-Lab.git
+git clone https://github.com/windtell-dev/distributed-replication-lab.git
 
-cd Distributed-Replication-Lab
+cd distributed-replication-lab
 ```
 
+Start Docker.
 Start the cluster:
 
 ```bash
 docker compose up --build
 ```
 
-Open the dashboard:
+Open the console:
 
 ```text
 http://localhost:3000
@@ -128,5 +129,30 @@ curl -X POST http://localhost:3002/notes \
   -H "Content-Type:application/json" \
   -d '{"text":"Hello from Node 3"}'
 ```
+
+## Stop the Cluster
+
+```bash
+docker compose down
+```
+
+---
+
+## What I learned for this project:
+
+Project Goals:
+> I wanted to get familiar with differrent technologies that would allow me to simulate a mini distributed systems that shows me how data stays available when servers fail. And also handling logic for use cases such as when a note is replicated but a node is deleted, how recovery and replication works, and possibly in the future deletion.
+
+Design Justifications:
+> Docker: Used for isolating running processes and worked well for the 3-node cluster architecture where one image creates 3 containers. I also used Docker Compose to start up the build rather than manually creating containers. Learned about multicontainer development and docker networking.
+> I chose Node.js for runtime for the backend so it can execute outside the browswer and power each node. I learned Javascript backend development, running servers, and npm packages.
+> I chose Express because it exposes REST APIs and that is how each node is able to talk to each other. I learned how to apply JSON requests logic to demonstrate how each node talks. Each node has a GET or POST with endpoints such as health, notes, and sync.
+> Axios. Allows for Nodes to also act as a client, not just user to node, but also node (as client) to node. Each Node acts as both the HTTP server and client. Using this allowed me to implement push replication and pull synchroniation relationship between my nodes. I wanted to explore how replication and recovery solve distributed systems problems.
+> JavaScript (w/HTML & CSS): Allowed me to actually be able to continuously retrieves live information from every node. Learned Fetch API and DOM manipulation.
+
+## Future additions
+- SQLite for notes
+- Delete Operations
+- Conflict handling
 
 ---
