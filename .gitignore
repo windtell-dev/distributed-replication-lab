@@ -4,4 +4,4 @@ node_modules/
 .vscode/
 npm-debug.log
 docker-compose.override.yml
-
+*.log
