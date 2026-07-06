@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Distributed Notes Lab</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <h1>Distributed<br />Notes Lab</h1>
+    <nav id="sidebarNav"></nav>
+
+    <div class="cluster-card">
+      <div class="cluster-title"><span class="dot" id="clusterDot"></span><p>Cluster Status</p></div>
+      <h2 id="clusterStatus">Checking...</h2>
+      <small id="clusterMessage">Loading cluster state</small>
+    </div>
+  </aside>
+
+  <main class="dashboard">
+    <header id="top">
+      <div>
+        <h2>Cluster Operations Console</h2>
+        <p>Real-time status of your distributed note replication cluster.</p>
+      </div>
+      <button id="refreshBtn" class="refresh-pill">
+        <span id="lastUpdated">Last updated: --:--:--</span>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+      </button>
+    </header>
+
+    <section class="stats" id="statsGrid"></section>
+
+    <section class="panel" id="nodes">
+      <div class="panel-header">
+        <h3>Nodes</h3>
+        <button class="link-button" data-target="nodes">View all nodes →</button>
+      </div>
+      <div id="nodesGrid" class="nodes-grid"></div>
+    </section>
+
+    <section class="bottom-grid">
+      <div class="panel" id="notes">
+        <h3>Notes Distribution</h3>
+        <div class="donut-wrap">
+          <svg id="donut" viewBox="0 0 120 120" width="180" height="180">
+            <circle cx="60" cy="60" r="48" fill="none" stroke="#e7e0cd" stroke-width="18"/>
+            <g id="donutSegments"></g>
+            <text x="60" y="58" text-anchor="middle" class="donut-total" id="donutTotal">0</text>
+            <text x="60" y="76" text-anchor="middle" class="donut-label">Total</text>
+          </svg>
+          <div id="donutLegend" class="donut-legend"></div>
+        </div>
+      </div>
+
+      <div class="panel" id="activity">
+        <h3>Recent Activity</h3>
+        <div id="activityList"></div>
+      </div>
+    </section>
+
+    <section class="panel" id="settings">
+      <h3>Settings</h3>
+      <div class="settings-row">
+        <span>Auto-refresh interval</span>
+        <select id="intervalSelect">
+          <option value="2000">2 seconds</option>
+          <option value="5000" selected>5 seconds</option>
+          <option value="10000">10 seconds</option>
+          <option value="0">Off</option>
+        </select>
+      </div>
+    </section>
+  </main>
+
+  <div id="drawerOverlay" class="drawer-overlay hidden"></div>
+  <aside id="nodeDrawer" class="node-drawer hidden">
+    <div class="drawer-header">
+      <div class="drawer-title">
+        <span class="dot" id="drawerDot"></span>
+        <h3 id="drawerTitle">Node</h3>
+        <span class="port" id="drawerPort"></span>
+      </div>
+      <button id="drawerClose" aria-label="Close">✕</button>
+    </div>
+    <div id="drawerBody"></div>
+  </aside>
+
+  <script>
+    const clusterNodes = [
+      { name: "node1", label: "Node 1", port: 3000 },
+      { name: "node2", label: "Node 2", port: 3001 },
+      { name: "node3", label: "Node 3", port: 3002 }
+    ];
+
+    const icons = {
+      overview: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>',
+      nodes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="9" r="2.5"/><circle cx="10" cy="18" r="2.5"/><path d="M8.2 7.2 15.6 8.5M7 8.3l2.3 7.4M16.4 11l-5 5.4"/></svg>',
+      notes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>',
+      activity: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 12 7 12 10 5 14 19 17 12 21 12"/></svg>',
+      settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg>',
+      pulse: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 12 7 12 10 5 14 19 17 12 21 12"/></svg>',
+      server: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><line x1="7" y1="7.5" x2="7.01" y2="7.5"/><line x1="7" y1="16.5" x2="7.01" y2="16.5"/></svg>',
+      doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>',
+      share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="12" r="2.5"/><circle cx="17" cy="6" r="2.5"/><circle cx="17" cy="18" r="2.5"/><line x1="8.3" y1="10.8" x2="14.8" y2="7.2"/><line x1="8.3" y1="13.2" x2="14.8" y2="16.8"/></svg>'
+    };
+
+    const navItems = [
+      { label: "Overview", target: "top", icon: "overview" },
+      { label: "Nodes", target: "nodes", icon: "nodes" },
+      { label: "Notes", target: "notes", icon: "notes" },
+      { label: "Activity", target: "activity", icon: "activity" },
+      { label: "Settings", target: "settings", icon: "settings" }
+    ];
+
+    const donutColors = ["#d9d1ba", "#cfc5aa", "#e5decb"];
+    const lastSync = {};
+    // ponytail: server has no event log, so failures/recoveries are observed
+    // client-side per page session; add a /events endpoint if history must persist
+    const nodeEvents = {};
+    const rawJson = {};
+    let latestNodeData = [];
+    let openNodeName = null;
+
+    function esc(text) {
+      return String(text).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    }
+
+    function renderSidebar() {
+      const nav = document.getElementById("sidebarNav");
+
+      nav.innerHTML = navItems.map((item, index) => `
+        <button class="nav-item ${index === 0 ? "active" : ""}" data-target="${item.target}">
+          <span class="nav-icon">${icons[item.icon]}</span>${item.label}
+        </button>
+      `).join("");
+
+      document.querySelectorAll(".nav-item").forEach(button => {
+        button.addEventListener("click", () => {
+          document.querySelectorAll(".nav-item").forEach(item => item.classList.remove("active"));
+          button.classList.add("active");
+
+          if (button.dataset.target === "top") {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          } else {
+            document.getElementById(button.dataset.target).scrollIntoView({ behavior: "smooth" });
+          }
+        });
+      });
+    }
+
+    async function fetchJson(url) {
+      const response = await fetch(url);
+      return response.json();
+    }
+
+    async function loadDashboard() {
+      const nodeData = [];
+
+      for (const node of clusterNodes) {
+        try {
+          const health = await fetchJson(`http://localhost:${node.port}/health`);
+          const notes = await fetchJson(`http://localhost:${node.port}/notes`);
+          lastSync[node.name] = new Date().toLocaleTimeString();
+          rawJson[node.name] = { health, notes };
+
+          nodeData.push({ ...node, healthy: true, peers: health.peers || [], notes });
+        } catch {
+          rawJson[node.name] = { health: null, notes: [] };
+          nodeData.push({ ...node, healthy: false, peers: [], notes: [] });
+        }
+      }
+
+      recordEvents(nodeData);
+      latestNodeData = nodeData;
+      renderDashboard(nodeData);
+      document.getElementById("lastUpdated").textContent =
+        `Last updated: ${new Date().toLocaleTimeString()}`;
+    }
+
+    function renderDashboard(nodeData) {
+      const healthyNodes = nodeData.filter(node => node.healthy).length;
+      const totalNotes = nodeData.reduce((sum, node) => sum + node.notes.length, 0);
+      const clusterHealthy = healthyNodes === nodeData.length;
+
+      // A note is a healthy replica when every healthy node holds a copy of it
+      const healthy = nodeData.filter(node => node.healthy);
+      const uniqueIds = [...new Set(nodeData.flatMap(node => node.notes.map(note => note.id)))];
+      const fullyReplicated = uniqueIds.filter(id =>
+        healthy.length && healthy.every(node => node.notes.some(note => note.id === id))
+      ).length;
+
+      document.getElementById("clusterStatus").textContent = clusterHealthy ? "Healthy" : "Degraded";
+      document.getElementById("clusterDot").classList.toggle("down", !clusterHealthy);
+      document.getElementById("clusterMessage").textContent = clusterHealthy
+        ? "All systems operational"
+        : `${nodeData.length - healthyNodes} node(s) offline`;
+
+      const stats = [
+        { title: "Healthy Nodes", value: healthyNodes, note: clusterHealthy ? "All operational" : "Some offline", theme: "green", icon: "pulse", noteClass: clusterHealthy ? "good" : "bad" },
+        { title: "Total Nodes", value: nodeData.length, note: "All configured", theme: "taupe", icon: "server", noteClass: "" },
+        { title: "Total Notes", value: totalNotes, note: "Across cluster", theme: "brown", icon: "doc", noteClass: "" },
+        { title: "Healthy Replicas", value: `${fullyReplicated}/${uniqueIds.length}`, note: fullyReplicated === uniqueIds.length ? "Fully replicated" : "Replication lagging", theme: "gold", icon: "share", noteClass: fullyReplicated === uniqueIds.length ? "good" : "bad" }
+      ];
+
+      document.getElementById("statsGrid").innerHTML = stats.map(stat => `
+        <div class="stat-card">
+          <div class="stat-icon ${stat.theme}">${icons[stat.icon]}</div>
+          <div>
+            <h3>${stat.title}</h3>
+            <p>${stat.value}</p>
+            <small class="${stat.noteClass}">${stat.note}</small>
+          </div>
+        </div>
+      `).join("");
+
+      document.getElementById("nodesGrid").innerHTML = nodeData.map(node => `
+        <article class="node-card" data-node="${node.name}">
+          <div class="node-title">
+            <div>
+              <span class="dot ${node.healthy ? "" : "down"}"></span>
+              <h4>${node.label}</h4>
+            </div>
+            <span class="port">:${node.port}</span>
+          </div>
+
+          <div class="node-row">
+            <span>Status</span>
+            <span class="badge ${node.healthy ? "healthy" : "offline"}">${node.healthy ? "Healthy" : "Offline"}</span>
+          </div>
+          <div class="node-row"><span>Notes</span><strong>${node.notes.length}</strong></div>
+          <div class="node-row"><span>Peers</span><strong>${formatPeers(node.peers)}</strong></div>
+          <div class="node-row"><span>Last Refresh</span><strong>${lastSync[node.name] || "—"}</strong></div>
+        </article>
+      `).join("");
+
+      document.querySelectorAll(".node-card").forEach(card => {
+        card.addEventListener("click", () => openDrawer(card.dataset.node));
+      });
+
+      renderDonut(nodeData, totalNotes);
+      renderActivity(nodeData);
+      if (openNodeName) renderDrawer();
+    }
+
+    function recordEvents(nodeData) {
+      for (const node of nodeData) {
+        const events = nodeEvents[node.name] || (nodeEvents[node.name] = []);
+        const previous = events.length ? events[events.length - 1].type : null;
+        const current = node.healthy ? "recovered" : "failed";
+
+        // Only log transitions (and skip the initial "recovered" on first load)
+        if (previous === null && node.healthy) continue;
+        if (previous !== current) {
+          events.push({ type: current, time: new Date().toLocaleTimeString() });
+        }
+      }
+    }
+
+    function openDrawer(name) {
+      openNodeName = name;
+      renderDrawer();
+      document.getElementById("nodeDrawer").classList.remove("hidden");
+      document.getElementById("drawerOverlay").classList.remove("hidden");
+    }
+
+    function closeDrawer() {
+      openNodeName = null;
+      document.getElementById("nodeDrawer").classList.add("hidden");
+      document.getElementById("drawerOverlay").classList.add("hidden");
+    }
+
+    function renderDrawer() {
+      const node = latestNodeData.find(n => n.name === openNodeName);
+      if (!node) return;
+
+      // Keep "View raw JSON" expanded across auto-refresh re-renders
+      const jsonWasOpen = document.querySelector(".raw-json")?.open;
+
+      document.getElementById("drawerTitle").textContent = `${node.label} Details`;
+      document.getElementById("drawerPort").textContent = `:${node.port}`;
+      document.getElementById("drawerDot").classList.toggle("down", !node.healthy);
+
+      const noteTime = note => Number(note.id)
+        ? new Date(Number(note.id)).toLocaleTimeString()
+        : "";
+
+      const storedNotes = node.notes.length
+        ? node.notes.map(note => `
+            <div class="drawer-item">
+              <p>${esc(note.text)}</p>
+              <small>from ${esc(note.sourceNode)} · ${noteTime(note)}</small>
+            </div>
+          `).join("")
+        : `<p class="empty">No notes stored on this node.</p>`;
+
+      const replication = node.notes.length
+        ? [...node.notes].sort((a, b) => Number(b.id) - Number(a.id)).map(note => `
+            <div class="drawer-item">
+              <span class="dot small"></span>
+              <p>${note.replicated
+                ? `Received "${esc(note.text)}" from ${esc(note.sourceNode)}`
+                : `Created "${esc(note.text)}" here, pushed to peers`}</p>
+              <small>${noteTime(note)}</small>
+            </div>
+          `).join("")
+        : `<p class="empty">No replication events yet.</p>`;
+
+      const events = nodeEvents[node.name] || [];
+      const recovery = events.length
+        ? events.map(event => `
+            <div class="drawer-item">
+              <span class="dot small ${event.type === "failed" ? "down" : ""}"></span>
+              <p>${event.type === "failed" ? "Node went offline" : "Node recovered and rejoined"}</p>
+              <small>${event.time}</small>
+            </div>
+          `).join("")
+        : `<p class="empty">No failures or recoveries observed this session.</p>`;
+
+      document.getElementById("drawerBody").innerHTML = `
+        <h4>Health</h4>
+        <div class="node-row"><span>Status</span>
+          <span class="badge ${node.healthy ? "healthy" : "offline"}">${node.healthy ? "Healthy" : "Offline"}</span>
+        </div>
+        <div class="node-row"><span>Node</span><strong>${node.name}</strong></div>
+        <div class="node-row"><span>Port</span><strong>${node.port}</strong></div>
+        <div class="node-row"><span>Last Refresh</span><strong>${lastSync[node.name] || "—"}</strong></div>
+
+        <h4>Peers</h4>
+        <div class="peer-chips">
+          ${node.peers.length
+            ? node.peers.map(peer => `<span class="chip">${esc(formatPeers([peer]))}</span>`).join("")
+            : `<p class="empty">No reachable peers.</p>`}
+        </div>
+
+        <h4>Stored Notes (${node.notes.length})</h4>
+        ${storedNotes}
+
+        <h4>Replication History</h4>
+        ${replication}
+
+        <h4>Recovery History</h4>
+        ${recovery}
+
+        <details class="raw-json">
+          <summary>View raw JSON</summary>
+          <pre>${esc(JSON.stringify(rawJson[node.name] || {}, null, 2))}</pre>
+        </details>
+      `;
+
+      if (jsonWasOpen) document.querySelector(".raw-json").open = true;
+    }
+
+    document.getElementById("drawerClose").addEventListener("click", closeDrawer);
+    document.getElementById("drawerOverlay").addEventListener("click", closeDrawer);
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape") closeDrawer();
+    });
+
+    function renderDonut(nodeData, totalNotes) {
+      const r = 48, circumference = 2 * Math.PI * r;
+      let offset = 0;
+
+      document.getElementById("donutSegments").innerHTML = totalNotes
+        ? nodeData.map((node, i) => {
+            const fraction = node.notes.length / totalNotes;
+            const seg = `<circle cx="60" cy="60" r="${r}" fill="none"
+              stroke="${donutColors[i % donutColors.length]}" stroke-width="18"
+              stroke-dasharray="${fraction * circumference} ${circumference}"
+              stroke-dashoffset="${-offset * circumference}"
+              transform="rotate(-90 60 60)"/>`;
+            offset += fraction;
+            return seg;
+          }).join("")
+        : "";
+
+      document.getElementById("donutTotal").textContent = totalNotes;
+
+      document.getElementById("donutLegend").innerHTML = nodeData.map((node, i) => `
+        <div class="legend-row">
+          <span class="legend-dot" style="background:${donutColors[i % donutColors.length]}"></span>
+          <span>${node.label}</span>
+          <strong>${totalNotes ? (node.notes.length / totalNotes * 100).toFixed(1) : "0.0"}%</strong>
+        </div>
+      `).join("");
+    }
+
+    function renderActivity(nodeData) {
+      const activities = nodeData
+        .flatMap(node => node.notes.map(note => ({
+          // note.id is Date.now() from server.js, so it doubles as a timestamp
+          time: Number(note.id) || 0,
+          text: note.replicated
+            ? `Note replicated to ${node.name} from ${note.sourceNode}`
+            : `New note created on ${node.name}`
+        })))
+        .sort((a, b) => b.time - a.time)
+        .slice(0, 6);
+
+      document.getElementById("activityList").innerHTML = activities.length
+        ? activities.map(item => `
+            <div class="activity-row">
+              <span class="dot small"></span>
+              <p>${item.text}</p>
+              <small>${item.time ? new Date(item.time).toLocaleTimeString() : ""}</small>
+            </div>
+          `).join("")
+        : `<p class="empty">No recent note activity yet.</p>`;
+    }
+
+    function formatPeers(peers) {
+      if (!peers.length) return "none";
+      return peers.map(peer => peer.match(/node\d/)?.[0]).filter(Boolean).join(", ");
+    }
+
+    document.getElementById("refreshBtn").addEventListener("click", loadDashboard);
+
+    document.querySelectorAll(".link-button").forEach(button => {
+      button.addEventListener("click", () => {
+        document.getElementById(button.dataset.target).scrollIntoView({ behavior: "smooth" });
+      });
+    });
+
+    let timer = setInterval(loadDashboard, 5000);
+    document.getElementById("intervalSelect").addEventListener("change", event => {
+      clearInterval(timer);
+      const ms = Number(event.target.value);
+      if (ms) timer = setInterval(loadDashboard, ms);
+    });
+
+    renderSidebar();
+    loadDashboard();
+  </script>
+</body>
+</html>

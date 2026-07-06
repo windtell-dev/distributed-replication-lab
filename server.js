@@ -1,3 +1,4 @@
+const cors = require("cors");
 const express = require("express");
 const axios = require("axios");
 
@@ -6,6 +7,7 @@ const axios = require("axios");
 const notes = [];
 
 const app = express();
+app.use(express.static("public"));
 
 
 // Configuration
@@ -19,7 +21,8 @@ const PEERS = process.env.PEERS
   : [];
 
 app.use(express.json());
-
+app.use(cors());
+app.use(express.static("public"));
 
 
 // Home Route
