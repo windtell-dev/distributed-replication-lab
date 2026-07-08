@@ -1,13 +1,13 @@
 const cors = require("cors");
 const express = require("express");
 const axios = require("axios");
+const Database = require("better-sqlite3");
 
-// Temporary in-memory storage for notes
-// Later, we'll replace this with SQLite
-const notes = [];
+// Database storage for notes - using SQLite
+// Each node owns its own SQLite database, database filename matches the node name
+let db;
 
 const app = express();
-app.use(express.static("public"));
 
 
 // Configuration
@@ -19,6 +19,25 @@ const NODE_NAME = process.env.NODE_NAME || "unknown-node";
 const PEERS = process.env.PEERS
   ? process.env.PEERS.split(",")
   : [];
+
+
+
+// Database
+// Creates the notes table if it does not already exist
+function setupDatabase() {
+  db = new Database(`${NODE_NAME}.db`);
+
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS notes (
+      id INTEGER PRIMARY KEY,
+      text TEXT NOT NULL,
+      sourceNode TEXT NOT NULL,
+      replicated INTEGER NOT NULL
+    )
+  `).run();
+
+  console.log(`${NODE_NAME} database ready`);
+}
 
 app.use(express.json());
 app.use(cors());
@@ -45,7 +64,7 @@ app.get("/health", (req, res) => {
 
 
 // POST /notes
-// Creates a new note and stores it in memory
+// Creates a new note and stores it in SQLite
 // Replicates the note to peers only if it was not already replicated
 app.post("/notes", async (req, res) => {
   const note = {
@@ -55,7 +74,15 @@ app.post("/notes", async (req, res) => {
     replicated: req.body.replicated || false
   };
 
-  notes.push(note);
+  db.prepare(`
+    INSERT OR IGNORE INTO notes (id, text, sourceNode, replicated)
+    VALUES (?, ?, ?, ?)
+  `).run(
+    note.id,
+    note.text,
+    note.sourceNode,
+    note.replicated ? 1 : 0
+  );
 
   let replicationStatus = [];
 
@@ -108,24 +135,33 @@ app.post("/sync", async (req, res) => {
     let added = 0;
 
     for (const peerNote of peerNotes) {
-      const alreadyExists = notes.some(note => note.id === peerNote.id);
+      const alreadyExists = db.prepare(
+        "SELECT id FROM notes WHERE id = ?"
+      ).get(peerNote.id);
 
       if (!alreadyExists) {
-        notes.push({
-          ...peerNote,
-          replicated: true
-        });
+        db.prepare(`
+          INSERT INTO notes (id, text, sourceNode, replicated)
+          VALUES (?, ?, ?, ?)
+        `).run(
+          peerNote.id,
+          peerNote.text,
+          peerNote.sourceNode,
+          1
+        );
 
         added++;
       }
     }
+
+    const allNotes = db.prepare("SELECT * FROM notes ORDER BY id ASC").all();
 
     res.json({
       message: "Sync complete",
       node: NODE_NAME,
       peer: peer,
       added: added,
-      totalNotes: notes.length
+      totalNotes: allNotes.length
     });
   } catch (error) {
     res.status(500).json({
@@ -147,13 +183,20 @@ async function syncFromPeer(peer) {
     let added = 0;
 
     for (const peerNote of peerNotes) {
-      const alreadyExists = notes.some(note => note.id === peerNote.id);
+      const alreadyExists = db.prepare(
+        "SELECT id FROM notes WHERE id = ?"
+      ).get(peerNote.id);
 
       if (!alreadyExists) {
-        notes.push({
-          ...peerNote,
-          replicated: true
-        });
+        db.prepare(`
+          INSERT INTO notes (id, text, sourceNode, replicated)
+          VALUES (?, ?, ?, ?)
+        `).run(
+          peerNote.id,
+          peerNote.text,
+          peerNote.sourceNode,
+          1
+        );
 
         added++;
       }
@@ -169,9 +212,14 @@ async function syncFromPeer(peer) {
 
 // Get All Notes
 // Returns every note currently stored on THIS node
-// Later will replicate notes so they'll eventually contain the same data
+// Notes are now loaded from this node's SQLite database
 app.get("/notes", (req, res) => {
-  res.json(notes);
+  const notes = db.prepare("SELECT * FROM notes ORDER BY id ASC").all();
+
+  res.json(notes.map(note => ({
+    ...note,
+    replicated: Boolean(note.replicated)
+  })));
 });
 
 
@@ -179,6 +227,8 @@ app.get("/notes", (req, res) => {
 // Start Server
 app.listen(3000, async () => {
   console.log(`${NODE_NAME} running on port 3000`);
+
+  setupDatabase();
 
   if (PEERS.length > 0) {
     console.log(`Peers configured at ${PEERS.join(", ")}`);

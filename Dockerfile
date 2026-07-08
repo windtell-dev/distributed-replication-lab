@@ -1,10 +1,11 @@
-FROM node:24
+FROM node:24-bookworm
 
-# sets working directory inside container
 WORKDIR /app
 
-# copy everything from my current project folder into the container’s current folder
+COPY package*.json ./
+
+RUN npm install
+
 COPY . .
 
-# when the container starts, run server.js
 CMD ["node", "server.js"]
